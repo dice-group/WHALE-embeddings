@@ -12,6 +12,14 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 # ----------------------------------------------------------------------------
+# INITIAL LOGGING CONFIGURATION
+# ----------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+# ----------------------------------------------------------------------------
 # DOMAIN PROCESSOR (no external domain list; group by base URL)
 # ----------------------------------------------------------------------------
 class DomainProcessor:
@@ -30,42 +38,66 @@ class DomainProcessor:
         netloc = urlparse(url).netloc
         return netloc[4:] if netloc.startswith("www.") else netloc
 
-    def process_data(self, file_path):
+    def process_data(self, file_path, position=0):
+        # Ensure logging is configured in this worker
+        root_logger = logging.getLogger()
+        if not root_logger.handlers:
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(asctime)s - %(process)d - %(levelname)s - %(message)s"
+            )
         pid = os.getpid()
+        filename = os.path.basename(file_path)
         logging.info(f"[PID {pid}] starting read of {file_path}")
         try:
             file_size = os.path.getsize(file_path)
             logging.info(f"[PID {pid}] file size: {file_size} bytes")
         except Exception:
-            logging.warning(f"Could not get size for {file_path}")
-        # now begin reading data
+            logging.warning(f"❌ Could not get size for {file_path}")
+
+        # Read and bucket lines by base URL with per-worker tqdm
         local_out = {}
         line_count = 0
-
-        # Attempt to read and bucket lines by base URL
         try:
             with gzip.open(file_path, "rt") as fh:
+                pbar = tqdm(
+                    total=file_size,
+                    unit="B",
+                    unit_scale=True,
+                    desc=f"{filename}",
+                    position=position,
+                    leave=False
+                )
                 for line in fh:
                     line_count += 1
+                    b = len(line.encode('utf-8'))
                     parts = line.split()
-                    if len(parts) < 2:
-                        continue
-                    url_part = parts[-2]
-                    base = self.get_base_url(url_part)
-                    local_out.setdefault(base, []).append(line)
+                    if len(parts) >= 2:
+                        url_part = parts[-2]
+                        base = self.get_base_url(url_part)
+                        local_out.setdefault(base, []).append(line)
+                    pbar.update(b)
+                pbar.close()
         except Exception:
             logging.exception(f"Error reading '{file_path}'")
-            return False  # indicate no data processed due to error
+            return False
 
         logging.info(
             f"[PID {pid}] finished read of {file_path}: "
             f"{line_count} lines processed, {len(local_out)} domains found"
         )
-        self.save_results(local_out)
+        self.save_results(local_out, position)
         return True
 
-    def save_results(self, local_out):
-        for dom, lines in tqdm(local_out.items(), desc="writing domains", unit="dom"):
+    def save_results(self, local_out, position=0):
+        # Optionally show per-worker tqdm for writing domains
+        for dom, lines in tqdm(
+            local_out.items(),
+            desc="writing domains",
+            unit="dom",
+            position=position,
+            leave=False
+        ):
             out_file = os.path.join(self.output_dir, f"{dom}.txt")
             os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
@@ -88,10 +120,9 @@ class DomainProcessor:
                 counts[os.path.basename(fn).replace(".txt", "")] = sum(1 for _ in f)
 
         if not counts:
-            logging.warning(f"No triples found for '{self.metadata}'. Skipping CSV log for this metadata.")
+            logging.warning(f"❌ No triples found for '{self.metadata}'. Skipping CSV log for this metadata.")
             return counts
 
-        # Write counts to CSV with header 'domain, #triples'
         try:
             with open(self.log_file, "w", newline="", encoding="utf-8") as csvfile:
                 writer = csv.writer(csvfile)
@@ -107,11 +138,6 @@ class DomainProcessor:
 # MAIN DRIVER (no domain_files)
 # ----------------------------------------------------------------------------
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-
     parser = argparse.ArgumentParser(
         description="Extract domain-based datasets from structured-data .gz archives."
     )
@@ -136,30 +162,28 @@ if __name__ == "__main__":
 
         gz_files = sorted(glob.glob(os.path.join(raw_dir, "*.gz")))
         if not gz_files:
-            logging.warning(f"No .gz files in {raw_dir}, skipping metadata '{metaf}'.")
+            logging.warning(f"❌ No .gz files in {raw_dir}, skipping metadata '{metaf}'.")
             continue
 
-        proc = DomainProcessor(metaf, os.path.join(DATASET_BASE, metaf))
-        logging.info(f"--- Processing METADATA '{metaf}' with {n_jobs} core(s) ---")
-
-        # Process all files
-        results = Parallel(n_jobs=n_jobs)(
-            delayed(proc.process_data)(fpath) for fpath in gz_files
-        )
-
-        # Check if any file produced data
-        if len(gz_files) == 1 and not any(results):
-            logging.warning(f"Single .gz file in '{metaf}' yielded no data; skipping creation of dataset and CSV.")
-            continue
-
-        # Ensure output dir exists for multi-file or successful single-file
         out_dir = os.path.join(DATASET_BASE, metaf)
-        os.makedirs(out_dir, exist_ok=True)
+        proc = DomainProcessor(metaf, out_dir)
+        logging.info(f"--- Processing '{metaf}' with {n_jobs} core(s) ---")
 
+        # Process all files with distinct tqdm positions
+        jobs = []
+        for idx, fpath in enumerate(gz_files):
+            jobs.append(delayed(proc.process_data)(fpath, idx))
+
+        results = Parallel(n_jobs=n_jobs, backend="loky", verbose=0)(jobs)
+
+        if len(gz_files) == 1 and not any(results):
+            logging.warning(f"❌ Single .gz file in '{metaf}' yielded no data; skipping creation of dataset and CSV.")
+            continue
+
+        os.makedirs(out_dir, exist_ok=True)
         counts = proc.display_counts()
-        # If counts empty for single file, remove dir
         if not counts and len(gz_files) == 1:
-            logging.warning(f"Removing empty output directory for '{metaf}'.")
+            logging.warning(f"❌ Removing empty output directory for '{metaf}'.")
             shutil.rmtree(out_dir, ignore_errors=True)
 
     logging.info("✅ All metadata folders processed.")
