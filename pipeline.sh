@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 
-echo "▶️  Starting data download..."
-bash Crawler/download_data.sh
+# echo "▶️  Starting data download..."
+# bash Crawler/download_data.sh
 
-echo "▶️  Creating Python environment..."
+# echo "▶️  Creating Python environment..."
 
 # Enable conda commands in this script
 eval "$(conda shell.bash hook)"
 
 # Create (if missing) and activate the 'dice' env
-conda create -n dice python=3.10.13 --no-default-packages -y || true
+# conda create -n dice python=3.10.13 --no-default-packages -y || true
 conda activate dice
 
 # Install Python deps
-pip install --upgrade pip
-pip install tqdm dicee
+# pip install --upgrade pip
+# pip install tqdm dicee
 
 echo "▶️  Extracting domain-based datasets (2 cores)..."
 python3 Crawler/domain_extraction.py --num_core 3

@@ -5,7 +5,7 @@ base_dir="data/raw"
 mkdir -p "$base_dir"
 
 # Download the list of file URLs
-wget -q -O file.list http://webdatacommons.org/structureddata/2023-12/files/file.list
+# wget -q -O file.list http://webdatacommons.org/structureddata/2023-12/files/file.list
 
 # Count total number of URLs
 total_urls=$(grep -c '^http' file.list)
