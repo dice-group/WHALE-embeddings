@@ -1,13 +1,11 @@
 #!/bin/bash
-# set -euo pipefail
 
 # Base directory to store downloaded files (relative to repo root)
 base_dir="data/raw"
 mkdir -p "$base_dir"
 
 # Download the list of file URLs
-# (assumes file.list lives in the repo root)
-# wget -q -O file.list http://webdatacommons.org/structureddata/2023-12/files/file.list
+wget -q -O file.list http://webdatacommons.org/structureddata/2023-12/files/file.list
 
 # Count total number of URLs
 total_urls=$(grep -c '^http' file.list)
