@@ -16,7 +16,11 @@ conda activate dice
 # pip install --upgrade pip
 # pip install tqdm dicee
 
-echo "▶️  Extracting domain-based datasets (1 core)..."
-python3 Crawler/domain_extraction.py --num_core 1
+# echo "▶️  Extracting domain-based datasets (1 core)..."
+# python3 Crawler/domain_extraction.py --num_core 1
+
+echo "▶️  Scheduling training jobs..."
+# Pass through any flags you need, e.g. -b or -s
+bash Training/schedule_jobs.sh
 
 echo "✅ Pipeline complete."
