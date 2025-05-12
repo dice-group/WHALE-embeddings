@@ -104,7 +104,7 @@ submit_job_array() {
         # Direct output and error
         sbatch_opts+=" --output=${dir}/%x_%A_%a.log"
         sbatch_opts+=" --error=${dir}/%x_%A_%a.log"
-        sbatch_opts+=" --export=batch_file=$(realpath "$batch_file")"
+        sbatch_opts+=" --export=batch_file=$(realpath "$batch_file"),dataset=${dataset},metafolder=${metafolder}"
         sbatch_opts+=" --cpus-per-task=$cpus"
         [ -n "$mem" ] && sbatch_opts+=" --mem=$mem"
 
