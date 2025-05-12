@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# echo "▶️  Starting data download..."
-# bash Crawler/download_data.sh
+echo "▶️  Starting data download..."
+bash Crawler/download_data.sh
 
 echo "▶️  Creating Python environment..."
 
