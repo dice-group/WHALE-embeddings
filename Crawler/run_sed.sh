@@ -1,51 +1,47 @@
 #!/bin/sh
+shopt -s nullglob
 
-#SBATCH -J "SED COMMAND"
-#SBATCH -N 1
-#SBATCH -n 1
-#SBATCH -p normal
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=1G
-#SBATCH -t 02-00:00:00
-#SBATCH -A hpc-prf-dsg
-#SBATCH -o %x-%j.log
-#SBATCH -e %x-%j.log
-#SBATCH --mail-type=FAIL,TIME_LIMIT_80,BEGIN
-#SBATCH --mail-user=sshivam@mail.uni-paderborn.de
+# ----------------------------------------------------------------------------
+# Sed-based cleaning of all domain_dataset subfolders
+# ----------------------------------------------------------------------------
+BASE_DIR="data/domain_dataset"
 
-cd /scratch/hpc-prf-whale/WHALE-data/domain_specific/domain_dataset/
-search_dir="jsonld_dataset"
+# sed expression: replace blank-prefixed _:XYZ with <http://whale.data.dice-research.org/resource#XYZ>
+SED_EXPR='s/\([[:space:]]\|^\)_:\([a-zA-Z0-9]*\)/\1<http:\/\/whale.data.dice-research.org\/resource#\2>/g'
 
-sed_command='s/\([[:space:]]\|^\)_:\([a-zA-Z0-9]*\)/\1<http:\/\/whale.data.dice-research.org\/resource#\2>/g'
-
-echo "Get all files"
-mapfile -d '' files < <(find "$search_dir" -type f -print0)
-
-total=${#files[@]}
-counter=0
-
-echo "🔧 Processing $total files in '$search_dir'..."
-echo
-
-# Function to draw progress bar
+# Function to draw a progress bar
+# Usage: draw_progress <current> <total>
 draw_progress() {
-    local progress=$((counter * 100 / total))
-    local filled=$((progress / 2))
-    local empty=$((50 - filled))
+    local current=$1 total=$2
+    local percent=$(( current * 100 / total ))
+    local filled=$(( percent / 2 ))
+    local empty=$(( 50 - filled ))
     printf "\rProgress: ["
     printf "%0.s#" $(seq 1 $filled)
     printf "%0.s." $(seq 1 $empty)
-    printf "] %d%% (%d/%d)" "$progress" "$counter" "$total"
+    printf "] %d%% (%d/%d)" "$percent" "$current" "$total"
 }
 
-# Loop with progress
-for file in "${files[@]}"; do
-    sed -i -e "$sed_command" "$file"
-    ((counter++))
-    draw_progress
+# Loop over each metadata folder
+for search_dir in "$BASE_DIR"/*/; do
+    [ -d "$search_dir" ] || continue
+    echo -e "\n🔧 Processing directory: $search_dir"
+    
+    # gather files
+    mapfile -d '' files < <(find "$search_dir" -type f -print0)
+    total=${#files[@]}
+    if [ "$total" -eq 0 ]; then
+        echo "No files found in $search_dir, skipping."
+        continue
+    fi
+    counter=0
+    
+    # process files
+    for file in "${files[@]}"; do
+        sed -i -e "$SED_EXPR" "$file"
+        ((counter++))
+        draw_progress "$counter" "$total"
+    done
+
+    echo -e "\n✅ Completed cleaning $total files in '$search_dir'."
 done
-
-echo -e "\n✅ Done processing all files."
-
-exit 0
-~
