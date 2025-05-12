@@ -4,8 +4,12 @@
 base_dir="data/raw"
 mkdir -p "$base_dir"
 
-# Download the list of file URLs
-# wget -q -O file.list http://webdatacommons.org/structureddata/2023-12/files/file.list
+if [ ! -f "file.list" ]; then
+  echo "❗ file.list not found, using file.list_sample"
+  file_list="file.list_sample"
+else
+  file_list="file.list"
+fi
 
 # Count total number of URLs
 total_urls=$(grep -c '^http' file.list)
@@ -40,6 +44,6 @@ while IFS= read -r url; do
 
     # Download with progress bar
     wget --show-progress -q -P "$target_dir" "$url"
-done < file.list
+done < "$file_list"
 
 echo "✅ All downloads completed and stored in '$base_dir/'"
