@@ -15,11 +15,12 @@ WHALE-embeddings/
 ├── Crawler/
 │ ├── download_data.sh # Download raw .nq.gz files into data/raw
 │ ├── domain_extraction.py # Split triples by domain into data/domain_dataset
-│ └── file.list_sample # Sample URL list fallback
+│ └── run_sed.sh # Clean domain_dataset files via sed regex
 ├── Training/
 │ ├── schedule_jobs.sh # Scheduler: create batches and submit or run jobs
 │ └── run_embeddings_array.sh# Job script: run dicee or sbatch array tasks
 ├── pipeline.sh # Top-level orchestration: download, extract, schedule
+├── file.list_sample # Sample URL list fallback
 ├── .gitignore
 └── README.md # (this file)
 ```
@@ -35,6 +36,12 @@ WHALE-embeddings/
    - Walks each `data/raw/<metadata>/` folder.  
    - Reads every `.gz`, buckets triples by base-URL domain, and writes per-domain `.txt` files into `data/domain_dataset/<metadata>/`.  
    - Logs triple counts into `data/domain_logs/<metadata>.csv`.
+
+3. **run_sed.sh**
+
+    - Iterates over all subfolders under `data/domain_dataset/`.
+    - Applies a `sed` regex to each file, replacing blank-node prefixes (`_:id`) with full resource URIs.
+    - Provides an in-console progress bar per folder.
 
 ### Training
 
